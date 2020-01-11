@@ -1,3 +1,6 @@
+/functions/node_modules
+/functions/key
+
 # Logs
 logs
 *.log

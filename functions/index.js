@@ -2,7 +2,10 @@ const functions = require('firebase-functions');
 // our function getBlubs() needs access to the database, using adven sdk
 const app = require('express')();
 const admin = require('firebase-admin'); // to use this admin, we need to initalise our appliation as below
-admin.initializeApp(); // usually for the method we will pass an appliciation into it, but this project already knows that .firebaserc has the project id inside it
+var serviceAccount = require('./key/admin.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+}); // usually for the method we will pass an appliciation into it, but this project already knows that .firebaserc has the project id inside it
 
 const firebaseConfig = {
   apiKey: "AIzaSyAWNkmNcLSu_dMgIzFQglD1mW8paoa4uAo",
@@ -18,8 +21,11 @@ const firebaseConfig = {
 const firebase = require('firebase');
 firebase.initializeApp(firebaseConfig);
 
-app.get('/blubs', (req, res) => {
-  admin.firestore().collection('blubs').orderBy('createdAt', 'desc').get()
+const db = admin.firestore();
+
+//(ONLY ALLOWS GET REQUEST)
+app.get('/blubs', (req, res) => { 
+  db.collection('blubs').orderBy('createdAt', 'desc').get()
       .then(data => {
         let blubs = [];
         data.forEach(doc => {
@@ -35,25 +41,22 @@ app.get('/blubs', (req, res) => {
       .catch(err => console.error(err));
 });
 
-// now we create another function that creates documents (THIS DOES NOT WORK)
+// now we create another function that creates documents (ONLY ALLOWS POST REQUEST)
 app.post('/blub', (req, res) => {
-    const newBlub = {
-        body: req.body.body,
-        userHandle: req.body.userHandle,
-        createdAt: new Date.toISOString()
-    };
-
-    admin
-      .firestore()
-      .collection('blubs')
-      .add(newBlub)
-      .then((doc) => {
-        res.json({ message: `document ${doc.id} created successfully` });
-      })
-      .catch((err) => {
-        res.status(500).json({ error: 'something went wrong, pal' });
-        console.error(err);
-      });
+  const newBlub = {
+    body: req.body.body,
+    userHandle: req.body.userHandle,
+    createdAt: new Date().toISOString()
+  }
+    
+  db.collection("blubs").add(newBlub)
+  .then((doc) => {
+    res.json({ message: `document ${doc.id} created successfully` })
+  })
+  .catch((err) => {
+    res.status(500).json({ error: 'something went wrong, pal' });
+    console.error(err);
+  });
 });
 
 // Signup route
@@ -66,6 +69,8 @@ app.post('/signup', (req, res) => {
   };
 
   // TODO: validate data
+
+  //debugger.
 
   firebase.auth().createUserWithEmailAndPassword(newUser.email, newUser.password)
     .then(data => {
