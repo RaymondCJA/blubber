@@ -66,17 +66,18 @@ app.post("/blub", (req, res) => {
     });
 });
 
-const isEmail = (email) => {
+const isEmail = email => {
   const regEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-  if(email.match(regEx)) return true;
+  if (email.match(regEx)) return true;
   else return false;
-}
+};
 
-// helper function that determines if a field is empty 
-const iseEmpty = (string) => {
-  if(string.trim() === '') return true; //we trim here so that someone who enters 1 space will not let the program consider it "not empty"
+// helper function that determines if a field is empty
+const iseEmpty = string => {
+  if (string.trim() === "") return true;
+  //we trim here so that someone who enters 1 space will not let the program consider it "not empty"
   else return false;
-} 
+};
 
 // Signup route
 app.post("/signup", (req, res) => {
@@ -89,17 +90,18 @@ app.post("/signup", (req, res) => {
 
   let errors = {};
 
-  if(iseEmpty(newUser.email)) {
-    errors.email = 'Email must not be empty'
-  } else if(!isEmail(newUser.email)) {
-    errors.email = "Must be a valid email address"
+  if (iseEmpty(newUser.email)) {
+    errors.email = "Email must not be empty";
+  } else if (!isEmail(newUser.email)) {
+    errors.email = "Must be a valid email address";
   }
 
-  if(iseEmpty(newUser.password)) errors.password = 'Must not be empty';
-  if(newUser.password !== newUser.confirmPassword) errors.confirmPassword = 'Passwords must match';
-  if(iseEmpty(newUser.handle)) errors.handle = 'Must not be empty';
+  if (iseEmpty(newUser.password)) errors.password = "Must not be empty";
+  if (newUser.password !== newUser.confirmPassword)
+    errors.confirmPassword = "Passwords must match";
+  if (iseEmpty(newUser.handle)) errors.handle = "Must not be empty";
 
-  if(Object.keys(errors).length > 0) {
+  if (Object.keys(errors).length > 0) {
     return res.status(400).json(errors);
   }
 
@@ -140,6 +142,39 @@ app.post("/signup", (req, res) => {
       } else {
         return res.status(500).json({ error: err.code });
       }
+    });
+});
+
+//login route here
+app.post("/login", (req, res) => {
+  const user = {
+    email: req.body.email,
+    password: req.body.password
+  };
+
+  let errors = {};
+
+  if (iseEmpty(user.email)) errors.email = "Must not be empty";
+  if (iseEmpty(user.password)) errors.password = "Must not be empty";
+
+  if (Object.keys(errors).length > 0) return res.status(400).json(errors);
+
+  firebase
+    .auth()
+    .signInWithEmailAndPassword(user.email, user.password)
+    .then(data => {
+      return data.user.getIdToken();
+    })
+    .then(token => {
+      return res.json({ token });
+    })
+    .catch(err => {
+      console.error(err);
+      if (err.code === "auth/wrong-password") {
+        return res
+          .status(403)
+          .json({ general: "Your email or password is incorrect, please try again" });
+      } else return res.status(500).json({ error: err.code });
     });
 });
 
