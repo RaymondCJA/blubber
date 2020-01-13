@@ -1,8 +1,8 @@
-const functions = require('firebase-functions');
+const functions = require("firebase-functions");
 // our function getBlubs() needs access to the database, using adven sdk
-const app = require('express')();
-const admin = require('firebase-admin'); // to use this admin, we need to initalise our appliation as below
-var serviceAccount = require('./key/admin.json');
+const app = require("express")();
+const admin = require("firebase-admin"); // to use this admin, we need to initalise our appliation as below
+var serviceAccount = require("./key/admin.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 }); // usually for the method we will pass an appliciation into it, but this project already knows that .firebaserc has the project id inside it
@@ -18,49 +18,68 @@ const firebaseConfig = {
   measurementId: "G-8P1PNVEE2B"
 };
 
-const firebase = require('firebase');
+const firebase = require("firebase");
 firebase.initializeApp(firebaseConfig);
 
 const db = admin.firestore();
 
 //(ONLY ALLOWS GET REQUEST)
-app.get('/blubs', (req, res) => { 
-  db.collection('blubs').orderBy('createdAt', 'desc').get()
-      .then(data => {
-        let blubs = [];
-        data.forEach(doc => {
-          blubs.push({
-            blubId: doc.id,
-            body: doc.data().body,
-            userHandle: doc.data().userHandle,
-            createdAt: doc.data().createdAt
-          });
+app.get("/blubs", (req, res) => {
+  db.collection("blubs")
+    .orderBy("createdAt", "desc")
+    .get()
+    .then(data => {
+      let blubs = [];
+      data.forEach(doc => {
+        blubs.push({
+          blubId: doc.id,
+          body: doc.data().body,
+          userHandle: doc.data().userHandle,
+          createdAt: doc.data().createdAt
         });
-        return res.json(blubs);
-      })
-      .catch(err => console.error(err));
+      });
+      return res.json(blubs);
+    })
+    .catch(err => console.error(err));
 });
 
 // now we create another function that creates documents (ONLY ALLOWS POST REQUEST)
-app.post('/blub', (req, res) => {
+app.post("/blub", (req, res) => {
+  if (req.body.body.trim() === "") {
+    return res.status(400).json({ body: "Body must not be empty" });
+  }
+
   const newBlub = {
     body: req.body.body,
     userHandle: req.body.userHandle,
     createdAt: new Date().toISOString()
-  }
-    
-  db.collection("blubs").add(newBlub)
-  .then((doc) => {
-    res.json({ message: `document ${doc.id} created successfully` })
-  })
-  .catch((err) => {
-    res.status(500).json({ error: 'something went wrong, pal' });
-    console.error(err);
-  });
+  };
+
+  db.collection("blubs")
+    .add(newBlub)
+    .then(doc => {
+      res.json({ message: `document ${doc.id} created successfully` });
+    })
+    .catch(err => {
+      res.status(500).json({ error: "something went wrong, pal" });
+      console.error(err);
+    });
 });
 
+const isEmail = (email) => {
+  const regEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  if(email.match(regEx)) return true;
+  else return false;
+}
+
+// helper function that determines if a field is empty 
+const iseEmpty = (string) => {
+  if(string.trim() === '') return true; //we trim here so that someone who enters 1 space will not let the program consider it "not empty"
+  else return false;
+} 
+
 // Signup route
-app.post('/signup', (req, res) => {
+app.post("/signup", (req, res) => {
   const newUser = {
     email: req.body.email,
     password: req.body.password,
@@ -68,18 +87,60 @@ app.post('/signup', (req, res) => {
     handle: req.body.handle
   };
 
+  let errors = {};
+
+  if(iseEmpty(newUser.email)) {
+    errors.email = 'Email must not be empty'
+  } else if(!isEmail(newUser.email)) {
+    errors.email = "Must be a valid email address"
+  }
+
+  if(iseEmpty(newUser.password)) errors.password = 'Must not be empty';
+  if(newUser.password !== newUser.confirmPassword) errors.confirmPassword = 'Passwords must match';
+  if(iseEmpty(newUser.handle)) errors.handle = 'Must not be empty';
+
+  if(Object.keys(errors).length > 0) {
+    return res.status(400).json(errors);
+  }
+
   // TODO: validate data
-
-  //debugger.
-
-  firebase.auth().createUserWithEmailAndPassword(newUser.email, newUser.password)
+  let token, userId;
+  db.doc(`/users/${newUser.handle}`)
+    .get()
+    .then(doc => {
+      if (doc.exists) {
+        return res.status(400).json({ handle: "this handle is already taken" });
+      } else {
+        return firebase
+          .auth()
+          .createUserWithEmailAndPassword(newUser.email, newUser.password);
+      }
+    })
     .then(data => {
-      return res.status(201).json({ message: `user ${data.user.uid} signed up successfully` });
+      userId = data.user.uid;
+      return data.user.getIdToken();
+    })
+    .then(idToken => {
+      token = idToken;
+      const userCredentials = {
+        handle: newUser.handle,
+        email: newUser.email,
+        createdAt: new Date().toISOString(),
+        userId
+      };
+      return db.doc(`/users/${newUser.handle}`).set(userCredentials);
+    })
+    .then(() => {
+      return res.status(201).json({ token });
     })
     .catch(err => {
       console.error(err);
-      return res.status(500).json({ error: err.code });
+      if (err.code === "auth/email-already-in-use") {
+        return res.status(400).json({ email: "Email is already in use" });
+      } else {
+        return res.status(500).json({ error: err.code });
+      }
     });
 });
 
-exports.api = functions.https.onRequest(app);
+exports.api = functions.region("asia-east2").https.onRequest(app);
