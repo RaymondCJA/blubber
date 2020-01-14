@@ -43,15 +43,48 @@ app.get("/blubs", (req, res) => {
     .catch(err => console.error(err));
 });
 
-// now we create another function that creates documents (ONLY ALLOWS POST REQUEST)
-app.post("/blub", (req, res) => {
+// tip for express: we can pass a second argument to any route, a function which does something, that intercepts the request and then does smth depending on what the request has, and decides whether to proceed to our handler
+// or to stop there and send a response (aka a middleware),
+// so just add the method as middleware for every protected route we use
+const FBAuth = (req, res, next) => { //  next: if we return it and call it as a function, its gonna proceed to our handler. we can chain as many middleware as we need
+  let idToken;
+  if(req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    idToken = req.headers.authorization.split('Bearer ')[1];
+  } else {
+    console.error('No token found.')
+    return res.status(403).json({ error: 'Unauthorized request, pal.'});
+  }
+
+  admin.auth().verifyIdToken(idToken)
+  .then(decodedToken => {
+    req.user = decodedToken;
+    console.log(decodedToken);
+    return db.collection('users')
+    .where('userId', '==', req.user.uid)
+    .limit(1)
+    .get();
+  })
+  .then(data => {
+    req.user.handle = data.docs[0].data().handle;
+    return next();
+  })
+  .catch(err => {
+    console.error('Error while verifying token', err);
+    return res.status(403).json(err)
+;  })
+}
+
+
+// now we create another function that creates blubs (ONLY ALLOWS POST REQUEST)
+app.post("/blub", FBAuth, (req, res) => {
+  //BECAUSE OF THE FBAuth middleware, by the time we reach the line below, the user has already been authenticated by the FBAuth function
   if (req.body.body.trim() === "") {
     return res.status(400).json({ body: "Body must not be empty" });
   }
 
   const newBlub = {
     body: req.body.body,
-    userHandle: req.body.userHandle,
+    userHandle: req.user.handle,
     createdAt: new Date().toISOString()
   };
 
