@@ -1,4 +1,4 @@
-const { admin } = require('./admin');
+const { admin, db } = require('./admin');
 
 // tip for express: we can pass a second argument to any route, a function which does something, that intercepts the request and then does smth depending on what the request has, and decides whether to proceed to our handler
 // or to stop there and send a response (aka a middleware),
@@ -15,7 +15,6 @@ module.exports = (req, res, next) => { //  next: if we return it and call it as 
     admin.auth().verifyIdToken(idToken)
     .then(decodedToken => {
       req.user = decodedToken;
-      console.log(decodedToken);
       return db.collection('users')
       .where('userId', '==', req.user.uid)
       .limit(1)
