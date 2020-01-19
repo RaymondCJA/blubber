@@ -41,3 +41,62 @@ exports.postOneBlub = (req, res) => {
       console.error(err);
     });
 };
+
+exports.getBlub = (req, res) => {
+  let blubData = {};
+  db.doc(`/blubs/${req.params.blubId}`)
+    .get()
+    .then(doc => {
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Blub not found" });
+      }
+      blubData = doc.data();
+      blubData.blubId = doc.id;
+      return db
+        .collection("comments")
+        .orderBy("createdAt", "desc")
+        .where("blubId", "==", req.params.blubId)
+        .get();
+    })
+    .then(data => {
+      blubData.comments = [];
+      data.forEach(doc => {
+        blubData.comments.push(doc.data());
+      });
+      return res.json(blubData);
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json({ error: err.code });
+    });
+};
+
+// Comment on a blub
+exports.commentOnBlub = (req, res) => {
+  if ((req.body.body.trim() === ""))
+    return res.status(400).json({ error: "Must not be empty" });
+
+  const newComment = {
+    body: req.body.body,
+    createdAt: new Date().toISOString(),
+    blubId: req.params.blubId,
+    userHandle: req.user.handle,
+    userImage: req.user.imageUrl
+  };
+
+  db.doc(`/blubs/${req.params.blubId}`)
+    .get()
+    .then(doc => {
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Blub not found" });
+      }
+      return db.collection("comments").add(newComment);
+    })
+    .then(() => {
+      res.json(newComment);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).json({ error: 'something went wrong' });
+    });
+};
