@@ -8,7 +8,10 @@ const {
   getAllBlubs,
   postOneBlub,
   getBlub,
-  commentOnBlub
+  commentOnBlub,
+  likeBlub,
+  unlikeBlub,
+  deleteBlub 
 } = require("./handlers/blubs");
 const {
   signup,
@@ -22,9 +25,9 @@ const {
 app.get("/blubs", getAllBlubs);
 app.post("/blub", FBAuth, postOneBlub);
 app.get("/blub/:blubId", getBlub);
-//TODO: delete blub
-//TODO: like a blub
-//TODO: unlike a blub
+app.delete('/blub/:blubId', FBAuth, deleteBlub);
+app.get('/blub/:blubId/like', FBAuth, likeBlub);
+app.get('/blub/:blubId/unlike', FBAuth, unlikeBlub);
 app.post("/blub/:blubId/comment", FBAuth, commentOnBlub);
 
 // users routes

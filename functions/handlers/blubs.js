@@ -28,13 +28,18 @@ exports.postOneBlub = (req, res) => {
   const newBlub = {
     body: req.body.body,
     userHandle: req.user.handle,
-    createdAt: new Date().toISOString()
+    userImage: req.user.imageUrl,
+    createdAt: new Date().toISOString(),
+    likeCount: 0,
+    commentCount: 0
   };
 
   db.collection("blubs")
     .add(newBlub)
     .then(doc => {
-      res.json({ message: `document ${doc.id} created successfully` });
+      const resBlub = newBlub;
+      resBlub.blubId = doc.id;
+      res.json(resBlub);
     })
     .catch(err => {
       res.status(500).json({ error: "something went wrong, pal" });
@@ -73,7 +78,7 @@ exports.getBlub = (req, res) => {
 
 // Comment on a blub
 exports.commentOnBlub = (req, res) => {
-  if ((req.body.body.trim() === ""))
+  if (req.body.body.trim() === "")
     return res.status(400).json({ error: "Must not be empty" });
 
   const newComment = {
@@ -90,6 +95,9 @@ exports.commentOnBlub = (req, res) => {
       if (!doc.exists) {
         return res.status(404).json({ error: "Blub not found" });
       }
+      return doc.ref.update({ commentCount: doc.data().commentCount + 1 }); //THIS ADDS 1 INSTEAD OF ADDING 1
+    })
+    .then(() => {
       return db.collection("comments").add(newComment);
     })
     .then(() => {
@@ -97,6 +105,121 @@ exports.commentOnBlub = (req, res) => {
     })
     .catch(err => {
       console.log(err);
-      res.status(500).json({ error: 'something went wrong' });
+      res.status(500).json({ error: "something went wrong" });
+    });
+};
+
+exports.likeBlub = (req, res) => {
+  const likeDocument = db
+    .collection("likes")
+    .where("userHandle", "==", req.user.handle)
+    .where("blubId", "==", req.params.blubId)
+    .limit(1);
+
+  const blubDocument = db.doc(`/blubs/${req.params.blubId}`);
+
+  let blubData;
+
+  blubDocument
+    .get()
+    .then(doc => {
+      if (doc.exists) {
+        blubData = doc.data();
+        blubData.blubId = doc.id;
+        return likeDocument.get();
+      } else {
+        return res.status(404).json({ error: "Blub not found" });
+      }
+    })
+    .then(data => {
+      if (data.empty) {
+        return db
+          .collection("likes")
+          .add({
+            blubId: req.params.blubId,
+            userHandle: req.user.handle
+          })
+          .then(() => {
+            blubData.likeCount++;
+            return blubDocument.update({ likeCount: blubData.likeCount });
+          })
+          .then(() => {
+            return res.json(blubData);
+          });
+      } else {
+        return res.status(400).json({ error: "Blub already liked" });
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json({ error: err.code });
+    });
+};
+
+exports.unlikeBlub = (req, res) => {
+  const likeDocument = db
+    .collection("likes")
+    .where("userHandle", "==", req.user.handle)
+    .where("blubId", "==", req.params.blubId)
+    .limit(1);
+
+  const blubDocument = db.doc(`/blubs/${req.params.blubId}`);
+
+  let blubData;
+
+  blubDocument
+    .get()
+    .then(doc => {
+      if (doc.exists) {
+        blubData = doc.data();
+        blubData.blubId = doc.id;
+        return likeDocument.get();
+      } else {
+        return res.status(404).json({ error: "Blub not found" });
+      }
+    })
+    .then(data => {
+      if (data.empty) {
+        return res.status(400).json({ error: "Blub not liked" });
+      } else {
+        return db
+          .doc(`/likes/${data.docs[0].id}`)
+          .delete()
+          .then(() => {
+            blubData.likeCount--;
+            return blubDocument.update({ likeCount: blubData.likeCount });
+          })
+          .then(() => {
+            res.json(blubData);
+          });
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json({ error: err.code });
+    });
+};
+
+// delete a blub
+exports.deleteBlub = (req, res) => {
+  const document = db.doc(`/blubs/${req.params.blubId}`);
+  document
+    .get()
+    .then(doc => {
+      if (!doc.exists) {
+        return res.status(404).json({ error: "Blub not found" });
+      }
+      if (doc.data().userHandle !== req.user.handle) {
+        return res.status(403).json({ error: "Unauthorised" });
+      } else {
+        return document.delete();
+      }
+    })
+    .then(() => {
+      res.json({ message: "Blub deleted successfully" });
+    })
+    .catch(err => {
+      console.error(err);
+      return res.status(500).json({ error: err.code });
     });
 };
