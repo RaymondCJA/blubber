@@ -9,6 +9,12 @@ The frontend repo of the app can be found at: https://github.com/RaymondCJA/blub
 
 ## Installation
 
+### Requirements/dependencies
+
+`blubber` requires npm version 8.x to install and run any further dependencies
+
+### Installation steps
+
 Fork/clone to your project directory, set up a firebase account and set your config details into the config file and deploy your app to firebase:
 
 ```sh
